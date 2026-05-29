@@ -17,6 +17,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/resend/resend-go/v3"
 )
 
 var (
@@ -92,6 +93,31 @@ type SMTPConfig struct {
 	UseTLS   bool
 }
 
+const (
+	EmailProviderSMTP   = "smtp"
+	EmailProviderResend = "resend"
+)
+
+// ResendConfig is the Resend HTTP API provider configuration.
+type ResendConfig struct {
+	APIKey   string
+	From     string
+	FromName string
+}
+
+type EmailDeliveryConfig struct {
+	Provider string
+	SMTP     *SMTPConfig
+	Resend   *ResendConfig
+}
+
+type EmailMessage struct {
+	To             string
+	Subject        string
+	HTML           string
+	IdempotencyKey string
+}
+
 // EmailService 邮件服务
 type EmailService struct {
 	settingRepo              SettingRepository
@@ -127,6 +153,32 @@ func emailRecipientName(email string) string {
 		return trimmed[:at]
 	}
 	return trimmed
+}
+
+func NormalizeEmailProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case EmailProviderResend:
+		return EmailProviderResend
+	default:
+		return EmailProviderSMTP
+	}
+}
+
+func formatSenderIdentity(from, fromName string) string {
+	from = sanitizeEmailHeader(strings.TrimSpace(from))
+	fromName = sanitizeEmailHeader(strings.TrimSpace(fromName))
+	if fromName == "" {
+		return from
+	}
+	return fmt.Sprintf("%s <%s>", fromName, from)
+}
+
+func generateEmailIdempotencyKey(prefix string) string {
+	var buf [16]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return fmt.Sprintf("%s/%d", prefix, time.Now().UnixNano())
+	}
+	return prefix + "/" + hex.EncodeToString(buf[:])
 }
 
 // GetSMTPConfig 从数据库获取SMTP配置
@@ -171,13 +223,64 @@ func (s *EmailService) GetSMTPConfig(ctx context.Context) (*SMTPConfig, error) {
 	}, nil
 }
 
+func (s *EmailService) GetEmailDeliveryConfig(ctx context.Context) (*EmailDeliveryConfig, error) {
+	keys := []string{
+		SettingKeyEmailProvider,
+		SettingKeySMTPHost,
+		SettingKeySMTPPort,
+		SettingKeySMTPUsername,
+		SettingKeySMTPPassword,
+		SettingKeySMTPFrom,
+		SettingKeySMTPFromName,
+		SettingKeySMTPUseTLS,
+		SettingKeyResendAPIKey,
+		SettingKeyResendFrom,
+		SettingKeyResendFromName,
+	}
+
+	settings, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return nil, fmt.Errorf("get email delivery settings: %w", err)
+	}
+
+	provider := NormalizeEmailProvider(settings[SettingKeyEmailProvider])
+	port := 587
+	if portStr := settings[SettingKeySMTPPort]; portStr != "" {
+		if p, err := strconv.Atoi(portStr); err == nil {
+			port = p
+		}
+	}
+
+	return &EmailDeliveryConfig{
+		Provider: provider,
+		SMTP: &SMTPConfig{
+			Host:     strings.TrimSpace(settings[SettingKeySMTPHost]),
+			Port:     port,
+			Username: strings.TrimSpace(settings[SettingKeySMTPUsername]),
+			Password: strings.TrimSpace(settings[SettingKeySMTPPassword]),
+			From:     strings.TrimSpace(settings[SettingKeySMTPFrom]),
+			FromName: strings.TrimSpace(settings[SettingKeySMTPFromName]),
+			UseTLS:   settings[SettingKeySMTPUseTLS] == "true",
+		},
+		Resend: &ResendConfig{
+			APIKey:   strings.TrimSpace(settings[SettingKeyResendAPIKey]),
+			From:     strings.TrimSpace(settings[SettingKeyResendFrom]),
+			FromName: strings.TrimSpace(settings[SettingKeyResendFromName]),
+		},
+	}, nil
+}
+
 // SendEmail 发送邮件（使用数据库中保存的配置）
 func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) error {
-	config, err := s.GetSMTPConfig(ctx)
+	config, err := s.GetEmailDeliveryConfig(ctx)
 	if err != nil {
 		return err
 	}
-	return s.SendEmailWithConfig(config, to, subject, body)
+	return s.SendEmailWithDeliveryConfig(ctx, config, EmailMessage{
+		To:      to,
+		Subject: subject,
+		HTML:    body,
+	})
 }
 
 const smtpDialTimeout = 10 * time.Second
@@ -205,6 +308,68 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 	}
 
 	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg), config.Host)
+}
+
+func (s *EmailService) SendEmailWithDeliveryConfig(ctx context.Context, config *EmailDeliveryConfig, msg EmailMessage) error {
+	if config == nil {
+		return ErrEmailNotConfigured
+	}
+	switch NormalizeEmailProvider(config.Provider) {
+	case EmailProviderResend:
+		return s.SendEmailWithResendConfig(ctx, config.Resend, msg)
+	default:
+		if config.SMTP == nil || strings.TrimSpace(config.SMTP.Host) == "" {
+			return ErrEmailNotConfigured
+		}
+		return s.SendEmailWithConfig(config.SMTP, msg.To, msg.Subject, msg.HTML)
+	}
+}
+
+func (s *EmailService) SendEmailWithResendConfig(ctx context.Context, config *ResendConfig, msg EmailMessage) error {
+	if config == nil || strings.TrimSpace(config.APIKey) == "" || strings.TrimSpace(config.From) == "" {
+		return ErrEmailNotConfigured
+	}
+	if strings.TrimSpace(msg.To) == "" {
+		return fmt.Errorf("recipient email is required")
+	}
+	provider := NewResendProvider(config)
+	return provider.Send(ctx, msg)
+}
+
+type resendEmailsSender interface {
+	SendWithOptions(ctx context.Context, params *resend.SendEmailRequest, options *resend.SendEmailOptions) (*resend.SendEmailResponse, error)
+}
+
+type ResendProvider struct {
+	config *ResendConfig
+	emails resendEmailsSender
+}
+
+func NewResendProvider(config *ResendConfig) *ResendProvider {
+	client := resend.NewClient(config.APIKey)
+	return &ResendProvider{config: config, emails: client.Emails}
+}
+
+func (p *ResendProvider) Send(ctx context.Context, msg EmailMessage) error {
+	if p == nil || p.config == nil || p.emails == nil {
+		return ErrEmailNotConfigured
+	}
+	to := sanitizeEmailHeader(msg.To)
+	subject := sanitizeEmailHeader(msg.Subject)
+	idempotencyKey := strings.TrimSpace(msg.IdempotencyKey)
+	if idempotencyKey == "" {
+		idempotencyKey = generateEmailIdempotencyKey("sub2api-email")
+	}
+	_, err := p.emails.SendWithOptions(ctx, &resend.SendEmailRequest{
+		From:    formatSenderIdentity(p.config.From, p.config.FromName),
+		To:      []string{to},
+		Subject: subject,
+		Html:    msg.HTML,
+	}, &resend.SendEmailOptions{IdempotencyKey: idempotencyKey})
+	if err != nil {
+		return fmt.Errorf("resend send email: %w", err)
+	}
+	return nil
 }
 
 // sendMailPlain sends mail without TLS using a dialer with timeout.

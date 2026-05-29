@@ -1605,6 +1605,12 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeySMTPFrom] = settings.SMTPFrom
 	updates[SettingKeySMTPFromName] = settings.SMTPFromName
 	updates[SettingKeySMTPUseTLS] = strconv.FormatBool(settings.SMTPUseTLS)
+	updates[SettingKeyEmailProvider] = NormalizeEmailProvider(settings.EmailProvider)
+	if settings.ResendAPIKey != "" {
+		updates[SettingKeyResendAPIKey] = settings.ResendAPIKey
+	}
+	updates[SettingKeyResendFrom] = settings.ResendFrom
+	updates[SettingKeyResendFromName] = settings.ResendFromName
 
 	// Cloudflare Turnstile 设置（只有非空才更新密钥）
 	updates[SettingKeyTurnstileEnabled] = strconv.FormatBool(settings.TurnstileEnabled)
@@ -2674,6 +2680,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyForceEmailOnThirdPartySignup:              "false",
 		SettingKeySMTPPort:                                  "587",
 		SettingKeySMTPUseTLS:                                "false",
+		SettingKeyEmailProvider:                             EmailProviderSMTP,
 		// Model fallback defaults
 		SettingKeyEnableModelFallback:      "false",
 		SettingKeyFallbackModelAnthropic:   "claude-3-5-sonnet-20241022",
@@ -2756,6 +2763,10 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SMTPFromName:                     settings[SettingKeySMTPFromName],
 		SMTPUseTLS:                       settings[SettingKeySMTPUseTLS] == "true",
 		SMTPPasswordConfigured:           settings[SettingKeySMTPPassword] != "",
+		EmailProvider:                    NormalizeEmailProvider(settings[SettingKeyEmailProvider]),
+		ResendAPIKeyConfigured:           settings[SettingKeyResendAPIKey] != "",
+		ResendFrom:                       settings[SettingKeyResendFrom],
+		ResendFromName:                   settings[SettingKeyResendFromName],
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
@@ -2826,6 +2837,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 
 	// 敏感信息直接返回，方便测试连接时使用
 	result.SMTPPassword = settings[SettingKeySMTPPassword]
+	result.ResendAPIKey = settings[SettingKeyResendAPIKey]
 	result.TurnstileSecretKey = settings[SettingKeyTurnstileSecretKey]
 
 	// LinuxDo Connect 设置：

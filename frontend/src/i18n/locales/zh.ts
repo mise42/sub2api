@@ -6071,6 +6071,13 @@ export default {
         enabled: '启用订阅到期提醒',
         enabledHint: '开启后，系统会在订阅到期前 7 天、3 天、1 天各发送一次提醒。'
       },
+      emailProvider: {
+        title: '邮件服务',
+        description: '选择并配置用于发送事务邮件的邮件提供商',
+        provider: '邮件提供商',
+        smtp: 'SMTP',
+        resend: 'Resend API'
+      },
       smtp: {
         title: 'SMTP 设置',
         description: '配置用于发送验证码的邮件服务',
@@ -6094,9 +6101,20 @@ export default {
         useTls: '使用 TLS',
         useTlsHint: '为 SMTP 连接启用 TLS 加密'
       },
+      resend: {
+        apiKey: 'Resend API Key',
+        apiKeyPlaceholder: 're_xxxxxxxxx',
+        apiKeyHint: '留空以保留现有 API Key',
+        apiKeyConfiguredPlaceholder: '********',
+        apiKeyConfiguredHint: 'API Key 已配置，留空以保留当前值。',
+        fromEmail: 'Resend 发件人邮箱',
+        fromEmailPlaceholder: "noreply{'@'}example.com",
+        fromName: 'Resend 发件人名称',
+        fromNamePlaceholder: 'Sub2API'
+      },
       testEmail: {
         title: '发送测试邮件',
-        description: '发送测试邮件以验证 SMTP 配置',
+        description: '发送测试邮件以验证当前邮件服务配置',
         recipientEmail: '收件人邮箱',
         recipientEmailPlaceholder: "test{'@'}example.com",
         sendTestEmail: '发送测试邮件',

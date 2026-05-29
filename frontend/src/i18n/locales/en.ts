@@ -5913,6 +5913,13 @@ export default {
         enabled: 'Enable Subscription Expiry Reminder',
         enabledHint: 'When enabled, the system sends reminders 7, 3, and 1 day before expiry.'
       },
+      emailProvider: {
+        title: 'Email Service',
+        description: 'Choose and configure the email provider for transactional email',
+        provider: 'Email Provider',
+        smtp: 'SMTP',
+        resend: 'Resend API'
+      },
       smtp: {
         title: 'SMTP Settings',
         description: 'Configure email sending for verification codes',
@@ -5936,9 +5943,20 @@ export default {
         useTls: 'Use TLS',
         useTlsHint: 'Enable TLS encryption for SMTP connection'
       },
+      resend: {
+        apiKey: 'Resend API Key',
+        apiKeyPlaceholder: 're_xxxxxxxxx',
+        apiKeyHint: 'Leave empty to keep existing API key',
+        apiKeyConfiguredPlaceholder: '********',
+        apiKeyConfiguredHint: 'API key configured. Leave empty to keep the current value.',
+        fromEmail: 'Resend From Email',
+        fromEmailPlaceholder: "noreply{'@'}example.com",
+        fromName: 'Resend From Name',
+        fromNamePlaceholder: 'Sub2API'
+      },
       testEmail: {
         title: 'Send Test Email',
-        description: 'Send a test email to verify your SMTP configuration',
+        description: 'Send a test email to verify the current email service configuration',
         recipientEmail: 'Recipient Email',
         recipientEmailPlaceholder: "test{'@'}example.com",
         sendTestEmail: 'Send Test Email',

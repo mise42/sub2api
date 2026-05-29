@@ -6175,20 +6175,21 @@
             </div>
           </div>
 
-          <!-- SMTP Settings - Only show when email verification is enabled -->
+          <!-- Email Settings - Only show when email verification is enabled -->
           <div v-if="form.email_verify_enabled" class="card">
             <div
               class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
               <div>
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                  {{ t("admin.settings.smtp.title") }}
+                  {{ t("admin.settings.emailProvider.title") }}
                 </h2>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {{ t("admin.settings.smtp.description") }}
+                  {{ t("admin.settings.emailProvider.description") }}
                 </p>
               </div>
               <button
+                v-if="form.email_provider === 'smtp'"
                 type="button"
                 @click="testSmtpConnection"
                 :disabled="testingSmtp || loadFailed"
@@ -6222,7 +6223,26 @@
               </button>
             </div>
             <div class="space-y-6 p-6">
-              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.emailProvider.provider") }}
+                </label>
+                <select v-model="form.email_provider" class="input">
+                  <option value="smtp">
+                    {{ t("admin.settings.emailProvider.smtp") }}
+                  </option>
+                  <option value="resend">
+                    {{ t("admin.settings.emailProvider.resend") }}
+                  </option>
+                </select>
+              </div>
+
+              <div
+                v-if="form.email_provider === 'smtp'"
+                class="grid grid-cols-1 gap-6 md:grid-cols-2"
+              >
                 <div>
                   <label
                     class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -6323,6 +6343,7 @@
 
               <!-- Use TLS Toggle -->
               <div
+                v-if="form.email_provider === 'smtp'"
                 class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
               >
                 <div>
@@ -6334,6 +6355,65 @@
                   </p>
                 </div>
                 <Toggle v-model="form.smtp_use_tls" />
+              </div>
+
+              <div
+                v-if="form.email_provider === 'resend'"
+                class="grid grid-cols-1 gap-6 md:grid-cols-2"
+              >
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.resend.apiKey") }}
+                  </label>
+                  <input
+                    v-model="form.resend_api_key"
+                    type="password"
+                    class="input"
+                    autocomplete="new-password"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    :placeholder="
+                      form.resend_api_key_configured
+                        ? t('admin.settings.resend.apiKeyConfiguredPlaceholder')
+                        : t('admin.settings.resend.apiKeyPlaceholder')
+                    "
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{
+                      form.resend_api_key_configured
+                        ? t("admin.settings.resend.apiKeyConfiguredHint")
+                        : t("admin.settings.resend.apiKeyHint")
+                    }}
+                  </p>
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.resend.fromEmail") }}
+                  </label>
+                  <input
+                    v-model="form.resend_from_email"
+                    type="email"
+                    class="input"
+                    :placeholder="t('admin.settings.resend.fromEmailPlaceholder')"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.resend.fromName") }}
+                  </label>
+                  <input
+                    v-model="form.resend_from_name"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.settings.resend.fromNamePlaceholder')"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -6950,6 +7030,7 @@ type SettingsForm = Omit<
   | "wechat_connect_mobile_enabled"
 > & {
   smtp_password: string;
+  resend_api_key: string;
   turnstile_secret_key: string;
   linuxdo_connect_client_secret: string;
   dingtalk_connect_client_secret: string;
@@ -7039,6 +7120,7 @@ const form = reactive<SettingsForm>({
     description: string;
   }>,
   frontend_url: "",
+  email_provider: "smtp",
   smtp_host: "",
   smtp_port: 587,
   smtp_username: "",
@@ -7047,6 +7129,10 @@ const form = reactive<SettingsForm>({
   smtp_from_email: "",
   smtp_from_name: "",
   smtp_use_tls: true,
+  resend_api_key: "",
+  resend_api_key_configured: false,
+  resend_from_email: "",
+  resend_from_name: "",
   // Cloudflare Turnstile
   turnstile_enabled: false,
   turnstile_site_key: "",
@@ -7809,6 +7895,7 @@ async function loadSettings() {
     registrationEmailSuffixWhitelistDraft.value = "";
     form.smtp_password = "";
     smtpPasswordManuallyEdited.value = false;
+    form.resend_api_key = "";
     form.turnstile_secret_key = "";
     form.linuxdo_connect_client_secret = "";
     form.dingtalk_connect_client_secret = "";
@@ -8149,6 +8236,7 @@ async function saveSettings() {
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
+      email_provider: form.email_provider,
       smtp_host: form.smtp_host,
       smtp_port: form.smtp_port,
       smtp_username: form.smtp_username,
@@ -8156,6 +8244,9 @@ async function saveSettings() {
       smtp_from_email: form.smtp_from_email,
       smtp_from_name: form.smtp_from_name,
       smtp_use_tls: form.smtp_use_tls,
+      resend_api_key: form.resend_api_key || undefined,
+      resend_from_email: form.resend_from_email,
+      resend_from_name: form.resend_from_name,
       turnstile_enabled: form.turnstile_enabled,
       turnstile_site_key: form.turnstile_site_key,
       turnstile_secret_key: form.turnstile_secret_key || undefined,
@@ -8370,6 +8461,7 @@ async function saveSettings() {
     registrationEmailSuffixWhitelistDraft.value = "";
     form.smtp_password = "";
     smtpPasswordManuallyEdited.value = false;
+    form.resend_api_key = "";
     form.turnstile_secret_key = "";
     form.linuxdo_connect_client_secret = "";
     form.dingtalk_connect_client_secret = "";
@@ -8469,6 +8561,7 @@ async function sendTestEmail() {
       : "";
     const result = await adminAPI.settings.sendTestEmail({
       email: testEmailAddress.value,
+      email_provider: form.email_provider,
       smtp_host: form.smtp_host,
       smtp_port: form.smtp_port,
       smtp_username: form.smtp_username,
@@ -8476,6 +8569,9 @@ async function sendTestEmail() {
       smtp_from_email: form.smtp_from_email,
       smtp_from_name: form.smtp_from_name,
       smtp_use_tls: form.smtp_use_tls,
+      resend_api_key: form.resend_api_key,
+      resend_from_email: form.resend_from_email,
+      resend_from_name: form.resend_from_name,
     });
     // API returns { message: "..." } on success, errors are thrown as exceptions
     appStore.showSuccess(result.message || t("admin.settings.testEmailSent"));

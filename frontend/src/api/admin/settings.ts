@@ -439,6 +439,7 @@ export interface SystemSettings {
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
   // SMTP settings
+  email_provider: "smtp" | "resend";
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;
@@ -446,6 +447,9 @@ export interface SystemSettings {
   smtp_from_email: string;
   smtp_from_name: string;
   smtp_use_tls: boolean;
+  resend_api_key_configured: boolean;
+  resend_from_email: string;
+  resend_from_name: string;
   // Cloudflare Turnstile settings
   turnstile_enabled: boolean;
   turnstile_site_key: string;
@@ -699,6 +703,10 @@ export interface UpdateSettingsRequest {
   smtp_from_email?: string;
   smtp_from_name?: string;
   smtp_use_tls?: boolean;
+  email_provider?: "smtp" | "resend";
+  resend_api_key?: string;
+  resend_from_email?: string;
+  resend_from_name?: string;
   turnstile_enabled?: boolean;
   turnstile_site_key?: string;
   turnstile_secret_key?: string;
@@ -897,6 +905,7 @@ export async function testSmtpConnection(
  */
 export interface SendTestEmailRequest {
   email: string;
+  email_provider: "smtp" | "resend";
   smtp_host: string;
   smtp_port: number;
   smtp_username: string;
@@ -904,6 +913,9 @@ export interface SendTestEmailRequest {
   smtp_from_email: string;
   smtp_from_name: string;
   smtp_use_tls: boolean;
+  resend_api_key: string;
+  resend_from_email: string;
+  resend_from_name: string;
 }
 
 /**

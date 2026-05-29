@@ -150,6 +150,11 @@ const (
 	SettingKeySMTPFromName = "smtp_from_name" // 发件人名称
 	SettingKeySMTPUseTLS   = "smtp_use_tls"   // 是否使用TLS
 
+	SettingKeyEmailProvider  = "email_provider"   // 邮件提供商: smtp/resend
+	SettingKeyResendAPIKey   = "resend_api_key"   // Resend API Key
+	SettingKeyResendFrom     = "resend_from"      // Resend 发件人地址
+	SettingKeyResendFromName = "resend_from_name" // Resend 发件人名称
+
 	// Cloudflare Turnstile 设置
 	SettingKeyTurnstileEnabled   = "turnstile_enabled"    // 是否启用 Turnstile 验证
 	SettingKeyTurnstileSiteKey   = "turnstile_site_key"   // Turnstile Site Key
