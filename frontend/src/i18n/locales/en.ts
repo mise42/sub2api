@@ -856,6 +856,8 @@ export default {
     accountCost: 'Cost',
     userBilled: 'User billed',
     accountBilled: 'Account billed',
+    resetNow: 'Now',
+    resetPending: 'Pending refresh',
     accountMultiplier: 'Account rate',
     avgDuration: 'Avg Duration',
     inSelectedRange: 'in selected range',
@@ -896,6 +898,9 @@ export default {
     unknown: 'Unknown',
     in: 'In',
     out: 'Out',
+    cacheHit: 'Cache hit',
+    cacheCreate: 'Cache create',
+    cacheHitRate: 'Cache hit rate',
     inputTokenPrice: 'Input price',
     outputTokenPrice: 'Output price',
     perMillionTokens: '/ 1M tokens',
@@ -906,6 +911,9 @@ export default {
     imageBillingSize: 'Billing size',
     imageInputSize: 'Input size',
     imageOutputSize: 'Output size',
+    imageOutputTokens: 'Image Output Tokens',
+    imageOutputTokenPrice: 'Image Output Price',
+    imageOutputCost: 'Image Output Cost',
     imageSizeSource: 'Size source',
     imageSizeBreakdown: 'Size breakdown',
     imageSizeSourceOutput: 'Upstream output',
@@ -933,7 +941,26 @@ export default {
     exportExcelSuccess: 'Usage data exported successfully (Excel format)',
     exportExcelFailed: 'Failed to export usage data',
     imageUnit: ' images',
-    userAgent: 'User-Agent'
+    userAgent: 'User-Agent',
+    tabs: { usage: 'Usage', errors: 'Error Requests' },
+    errors: {
+      time: 'Time', model: 'Model', endpoint: 'Endpoint', status: 'Status',
+      category: 'Category', platform: 'Platform', message: 'Message',
+      keyName: 'Key Name', keyDeleted: 'Deleted', allKeys: 'All keys',
+      modelPlaceholder: 'Search model', allCategories: 'All categories',
+      empty: 'No error requests', failedToLoad: 'Failed to load error requests',
+      categories: {
+        auth: 'Auth failed', rate_limit: 'Rate limited', quota: 'Balance/Subscription',
+        invalid_request: 'Invalid request', service_unavailable: 'Service unavailable',
+        upstream: 'Upstream error', internal: 'Platform error', other: 'Other',
+      },
+      detail: {
+        title: 'Error Request Detail',
+        responseBody: 'Response Body',
+        upstreamStatus: 'Upstream Status',
+        loadFailed: 'Failed to load detail, please try again',
+      },
+    },
   },
 
   // Shared keys for channel monitor (admin + user views)
@@ -3105,6 +3132,7 @@ export default {
         expiresAt: 'Expires At',
         actions: 'Actions'
       },
+      usageWindowsHint: '"5h / 7d" are the upstream account\'s official rolling usage windows (e.g. OpenAI ChatGPT, Claude). They are imposed by the upstream provider on the account itself — not configured by sub2api, and unrelated to the models you map. Usage resets automatically once each window rolls over, and the limit cannot be lifted from within sub2api.',
       allPrivacyModes: 'All Privacy States',
       privacyUnset: 'Unset',
       privacyTrainingOff: 'Training data sharing disabled',
@@ -3274,6 +3302,11 @@ export default {
       recoverStateHint: 'Used to recover error, rate-limit, and temporary unschedulable runtime state.',
       recoverStateSuccess: 'Account state recovered successfully',
       recoverStateFailed: 'Failed to recover account state',
+      fallbackActive: 'Fallback',
+      fallbackActiveTip: 'Origin proxy {origin} expired',
+      revertProxy: 'Revert proxy',
+      revertProxySuccess: 'Successfully reverted to original proxy',
+      revertProxyFailed: 'Failed to revert proxy',
       resetStatus: 'Reset Status',
       statusReset: 'Account status reset successfully',
       failedToResetStatus: 'Failed to reset account status',
@@ -3349,10 +3382,21 @@ export default {
           'Automatic passthrough is currently enabled: it only affects HTTP passthrough and does not disable WS mode.',
         responsesMode: 'Responses API support',
         responsesModeDesc:
-          'Only applies to OpenAI API Key accounts. Auto follows probe results; force modes override probing.',
+          'Only applies to the OpenAI API Key text forwarding path. Auto follows probe results; force modes override probing.',
         responsesModeAuto: 'Auto',
         responsesModeForceResponses: 'Force Responses',
         responsesModeForceChatCompletions: 'Force Chat Completions',
+        responsesModeTextDisabledHint:
+          'Not applicable when the Responses / Chat Completions endpoint is not enabled.',
+        endpointCapabilities: 'Endpoint capabilities',
+        endpointCapabilitiesDesc:
+          'Used by account routing. The text endpoint follows the Responses API support setting above and is shown as Responses, Chat Completions, or auto mode; Embeddings independently controls /v1/embeddings.',
+        capabilityResponses: 'Responses',
+        capabilityTextAuto: 'Responses / Chat Completions (Auto)',
+        capabilityResponsesAuto: 'Responses (auto probe)',
+        capabilityChatCompletions: 'Chat Completions',
+        capabilityChatCompletionsAuto: 'Chat Completions (auto probe)',
+        capabilityEmbeddings: 'Embeddings',
         responsesStatusAutoSupported: 'Auto probe: Responses',
         responsesStatusAutoUnsupported: 'Auto probe: Chat Completions',
         responsesStatusAutoUnknown: 'Auto probe: unknown',
@@ -3361,6 +3405,9 @@ export default {
         codexCLIOnly: 'Codex official clients only',
         codexCLIOnlyDesc:
           'Only applies to OpenAI OAuth. When enabled, only Codex official client families are allowed; when disabled, the gateway bypasses this restriction and keeps existing behavior.',
+        codexCLIOnlyAllowClaudeCode: "Also allow Claude Code's Codex plugin",
+        codexCLIOnlyAllowClaudeCodeDesc:
+          'Only takes effect when the switch above is on. Additionally allows requests from the Claude Code Codex plugin (exact match on originator=Claude Code) without weakening blocking of other non-official clients.',
         codexImageGenerationBridge: 'Codex image-generation bridge',
         codexImageGenerationBridgeDesc:
           'Account policy takes precedence over channel and global settings. Only controls whether Codex requests through the /responses text endpoint receive the image_generation tool; standalone image-generation endpoints are unaffected.',
@@ -3461,6 +3508,12 @@ export default {
         'When enabled, warmup requests like title generation will return mock responses without consuming upstream tokens',
       autoPauseOnExpired: 'Auto Pause On Expired',
       autoPauseOnExpiredDesc: 'When enabled, the account will auto pause scheduling after it expires',
+	  autoPause5hThreshold: '5h Usage Threshold (%)',
+	  autoPause7dThreshold: '7d Usage Threshold (%)',
+	  autoPauseThresholdHint: 'Leave empty or set 0 to use the global default threshold (configured in Ops settings); set a value to override the global default. Reaching the threshold only skips the account during scheduling and does not modify schedulable.',
+	  autoPause5hDisabled: 'Disable 5h auto-pause',
+	  autoPause7dDisabled: 'Disable 7d auto-pause',
+	  autoPauseDisabledHint: 'When enabled, this account is never auto-paused (even if a global default threshold is configured).',
       // Quota control (Anthropic OAuth/SetupToken only)
       quotaControl: {
         title: 'Quota Control',
@@ -4130,6 +4183,8 @@ export default {
         status: 'Status',
         accounts: 'Accounts',
         latency: 'Latency',
+        expiry: 'Validity',
+        createdAt: 'Created',
         actions: 'Actions'
       },
       testConnection: 'Test Connection',
@@ -4227,7 +4282,21 @@ export default {
       hostRequired: 'Please enter host address',
       portInvalid: 'Port must be between 1-65535',
       deleteConfirm:
-        "Are you sure you want to delete '{name}'? Accounts using this proxy will have their proxy removed."
+        "Are you sure you want to delete '{name}'? Accounts using this proxy will have their proxy removed.",
+      neverExpires: 'Never',
+      expired: 'Expired',
+      overdueDays: 'Overdue {days}d',
+      expiringInDays: 'Expires in {days}d',
+      remainingDays: '{days}d left',
+      expiresAt: 'Validity',
+      nDays: '{days}d',
+      expiryDaysPlaceholder: 'Custom days, empty = never',
+      expiryWarnDays: 'Expiry warning (days)',
+      fallbackMode: 'Failure fallback',
+      fallbackNone: 'No fallback',
+      fallbackProxy: 'Backup proxy',
+      fallbackDirect: 'Direct connection',
+      backupProxy: 'Backup proxy',
     },
 
     // Redeem Codes
@@ -4504,6 +4573,7 @@ export default {
       ipAddress: 'IP',
       clickToViewBalance: 'Click to view balance history',
       failedToLoadUser: 'Failed to load user info',
+      userDeletedBadge: 'Deleted',
       cleanup: {
         button: 'Cleanup',
         title: 'Cleanup Usage Records',
@@ -4735,6 +4805,8 @@ export default {
         group: 'Group',
         user: 'User',
         userId: 'User ID',
+        apiKey: 'API Key',
+        keyDeletedBadge: 'Key Deleted',
         account: 'Account',
         accountId: 'Account ID',
         status: 'Status',
@@ -4861,7 +4933,11 @@ export default {
         suggestRequest: 'Client request error: ask customer to fix request parameters',
         suggestAuth: 'Auth failed: verify API key/credentials',
         suggestPlatform: 'Platform error: prioritize investigation and fix',
-        suggestGeneric: 'See details for more context'
+        suggestGeneric: 'See details for more context',
+        apiKeyPrefix: 'Key Prefix',
+        attemptedKeyPrefix: 'Attempted Key Prefix',
+        deletedKeyOwner: 'Deleted Key Owner',
+        keyDeletedBadge: 'Key Deleted'
       },
       requestDetails: {
         title: 'Request Details',
@@ -4975,6 +5051,7 @@ export default {
           accountRateLimitedCount: 'Rate-limited Accounts',
           accountErrorCount: 'Error Accounts (excluding temporarily unschedulable)',
           accountErrorRatio: 'Error Account Ratio (%)',
+          accountTempUnscheduledCount: 'Temporarily Unschedulable Accounts',
           overloadAccountCount: 'Overloaded Accounts'
         },
         metricDescriptions: {
@@ -4992,6 +5069,7 @@ export default {
           accountRateLimitedCount: 'Number of rate-limited accounts within the window.',
           accountErrorCount: 'Number of error accounts within the window (excluding temporarily unschedulable).',
           accountErrorRatio: 'Error account ratio within the window (0-100).',
+          accountTempUnscheduledCount: 'Number of accounts currently temporarily unschedulable (e.g. proxy/credential failure auto-eviction).',
           overloadAccountCount: 'Number of overloaded accounts within the window.'
         },
         hints: {
@@ -5176,6 +5254,11 @@ export default {
         aggregation: 'Pre-aggregation Tasks',
         enableAggregation: 'Enable Pre-aggregation',
         aggregationHint: 'Pre-aggregation improves query performance for long time windows',
+        openaiQuotaAutoPause: 'OpenAI Account Quota Auto-pause',
+        openaiQuotaAutoPauseHint: 'When an OpenAI account reaches its 5h / 7d usage threshold, the scheduler skips it automatically and resumes once the window rolls over. Per-account thresholds take precedence over this global default.',
+        openaiQuotaAutoPauseDefault5h: 'Default 5h usage threshold (%)',
+        openaiQuotaAutoPauseDefault7d: 'Default 7d usage threshold (%)',
+        openaiQuotaAutoPauseThresholdHint: 'Value 0-100; leave blank or 0 to disable the global default threshold.',
         errorFiltering: 'Error Filtering',
         ignoreCountTokensErrors: 'Ignore count_tokens errors',
         ignoreCountTokensErrorsHint: 'When enabled, errors from count_tokens requests will not be written to the error log.',
@@ -5206,7 +5289,8 @@ export default {
           slaMinPercentRange: 'SLA minimum percentage must be between 0 and 100',
           ttftP99MaxRange: 'TTFT P99 maximum must be a number ≥ 0',
           requestErrorRateMaxRange: 'Request error rate maximum must be between 0 and 100',
-          upstreamErrorRateMaxRange: 'Upstream error rate maximum must be between 0 and 100'
+          upstreamErrorRateMaxRange: 'Upstream error rate maximum must be between 0 and 100',
+          openaiQuotaAutoPauseRange: 'OpenAI quota auto-pause threshold must be between 0 and 100'
         }
       },
       concurrency: {
@@ -5600,6 +5684,9 @@ export default {
         openaiCodexUserAgent: 'OpenAI Codex UA',
         openaiCodexUserAgentPlaceholder: 'codex-tui/0.125.0 (Ubuntu 22.4.0; x86_64) xterm-256color (codex-tui; 0.125.0)',
         openaiCodexUserAgentHint: 'Used to bypass Cloudflare browser-UA challenges on the OpenAI upstream. Only applies when the client User-Agent is detected as a browser (Mozilla/...). Leave empty to use the built-in default.',
+        openaiAllowClaudeCodeCodexPlugin: "Allow using the Codex plugin in Claude Code",
+        openaiAllowClaudeCodeCodexPluginDesc:
+          "Global switch; only affects OpenAI OAuth accounts that have 'Codex official clients only' enabled. When on, all such accounts additionally allow requests from the Claude Code Codex plugin (exact match on originator=Claude Code) without per-account config; upstream requests remain pass-through.",
       },
       webSearchEmulation: {
         title: 'Web Search Emulation',
@@ -6314,6 +6401,14 @@ export default {
       openaiExperimentalScheduler: {
         title: 'OpenAI experimental scheduler policy',
         description: "Disabled by default. When enabled, this only changes the gateway's experimental account-selection policy for OpenAI traffic; it does not indicate an upstream OpenAI capability."
+      },
+      usageRecords: {
+        title: 'Usage Records',
+        description: 'Settings for usage and failed-request records visible to end users.',
+      },
+      user_error_view: {
+        label: 'Allow users to view their own error requests',
+        description: 'When enabled, users can see a redacted view of their failed requests on the usage page (no internal/upstream details). Requires ops monitoring enabled to have data.',
       },
       saveSettings: 'Save Settings',
       saving: 'Saving...',
