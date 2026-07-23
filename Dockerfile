@@ -65,7 +65,9 @@ ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
 
 # Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apk add --no-cache git ca-certificates tzdata || \
+    { sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories && \
+      apk add --no-cache git ca-certificates tzdata; }
 
 WORKDIR /app/backend
 
@@ -117,6 +119,17 @@ RUN apk add --no-cache \
     krb5-libs \
     libldap \
     libedit \
+    || { sed -i 's|https://dl-cdn.alpinelinux.org/alpine|https://mirrors.aliyun.com/alpine|g' /etc/apk/repositories && \
+         apk add --no-cache \
+           ca-certificates \
+           tzdata \
+           su-exec \
+           libpq \
+           zstd-libs \
+           lz4-libs \
+           krb5-libs \
+           libldap \
+           libedit; } \
     && rm -rf /var/cache/apk/*
 
 # Copy pg_dump and psql from the same postgres image used in docker-compose
