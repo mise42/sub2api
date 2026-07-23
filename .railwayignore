@@ -1,0 +1,24 @@
+# Files outside the production Docker build inputs.
+.github/
+assets/
+openspec/
+skills/
+tools/
+
+README.md
+README_CN.md
+README_JA.md
+CLA.md
+CONTEXT.md
+DEV_GUIDE.md
+LICENSE
+Makefile
+Dockerfile.goreleaser
+.goreleaser.simple.yaml
+.goreleaser.yaml
+
+# Tests are validated locally before deployment and are excluded from the
+# production Docker context by .dockerignore.
+backend/**/*_test.go
+frontend/src/**/__tests__/
+frontend/src/**/*.spec.ts
