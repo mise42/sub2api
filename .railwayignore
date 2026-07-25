@@ -1,6 +1,6 @@
 # Files outside the production Docker build inputs.
 .github/
-assets/
+/assets/
 openspec/
 skills/
 tools/
