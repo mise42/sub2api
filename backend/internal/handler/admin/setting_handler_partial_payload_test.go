@@ -66,6 +66,18 @@ func TestUpdateSettingsSMTPFromAliasIsWritable(t *testing.T) {
 	require.Equal(t, "new@example.com", repo.values[service.SettingKeySMTPFrom])
 }
 
+func TestUpdateSettingsGrokDefaultBaseURLModeIsWritable(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeyGrokDefaultBaseURLMode: service.GrokDefaultBaseURLModeCLI,
+	})
+
+	rec := doUpdateSettings(t, h, map[string]any{
+		"grok_default_base_url_mode": service.GrokDefaultBaseURLModeEUWest1,
+	}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, service.GrokDefaultBaseURLModeEUWest1, repo.values[service.SettingKeyGrokDefaultBaseURLMode])
+}
+
 func TestUpdateSettingsRejectsTwoCaptchaProviders(t *testing.T) {
 	h, _ := newStepUpSwitchTestHandler(t, map[string]string{
 		service.SettingKeyTurnstileEnabled:   "true",
@@ -173,4 +185,21 @@ func TestUpdateSettingsValidatesTencentCaptchaAppIDWhenEnabledFlagIsOmitted(t *t
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	require.Contains(t, rec.Body.String(), "positive integer")
+}
+
+// subscription_enabled is an opt-out switch: an explicit false is written as-is,
+// and a later payload that omits the field keeps the stored value.
+func TestUpdateSettingsSubscriptionEnabledIsWritableAndKeptWhenOmitted(t *testing.T) {
+	h, repo := newStepUpSwitchTestHandler(t, map[string]string{
+		service.SettingKeySubscriptionEnabled: "true",
+	})
+
+	rec := doUpdateSettings(t, h, map[string]any{"subscription_enabled": false}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "false", repo.values[service.SettingKeySubscriptionEnabled])
+
+	rec = doUpdateSettings(t, h, map[string]any{"site_name": "Example Gateway"}, nil)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "false", repo.values[service.SettingKeySubscriptionEnabled],
+		"a payload without subscription_enabled must not flip the stored value back to true")
 }

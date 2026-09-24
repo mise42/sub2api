@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 
+import enCommon from "@/i18n/locales/en/common";
+import enSettings from "@/i18n/locales/en/admin/settings";
+import zhCommon from "@/i18n/locales/zh/common";
+import zhSettings from "@/i18n/locales/zh/admin/settings";
 import SettingsView from "../SettingsView.vue";
 
 const {
@@ -197,8 +201,9 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.openaiExperimentalScheduler.lowRatePriorityTitle": "低倍率优先",
     "admin.settings.openaiExperimentalScheduler.lowRatePriorityDescription": "开启后优先选择计费倍率较低的账号；倍率相同时，再比较账号优先级和当前负载等。启用实验调度策略后，此开关不生效。",
     "admin.settings.openaiExperimentalScheduler.oauthRateTitle": "OAuth 调度参考倍率",
-    "admin.settings.openaiExperimentalScheduler.oauthRatePriorityDescription": "同一分组同时包含 API Key 和 OAuth 账号时，OAuth 账号按此倍率与已探测的 API Key 计费倍率一起排序。",
-    "admin.settings.openaiExperimentalScheduler.oauthRateWeightedDescription": "同一分组同时包含 API Key 和 OAuth 账号时，计算“计费倍率”得分时，OAuth 账号按此倍率参与计算。",
+    "admin.settings.openaiExperimentalScheduler.oauthRatePriorityDescription": "OAuth 账号按此参考倍率参与低倍率优先排序；留空时使用各自的账号倍率。API Key 账号优先使用有效探测倍率，无有效探测时使用账号倍率。",
+    "admin.settings.openaiExperimentalScheduler.oauthRateWeightedDescription": "计算“计费倍率”得分时，OAuth 账号使用此参考倍率；留空时使用各自的账号倍率。API Key 账号优先使用有效探测倍率，无有效探测时使用账号倍率。",
+    "admin.settings.openaiExperimentalScheduler.oauthRateInvalid": "OAuth 调度参考倍率必须是非负数字，或留空以使用账号倍率。",
     "admin.settings.openaiExperimentalScheduler.stickyWeightedTitle": "粘性加权",
     "admin.settings.openaiExperimentalScheduler.stickyWeightedDescription": "开启后 previous_response_id 和 session_hash 粘性进入高级调度打分；关闭时仍按旧逻辑硬命中粘性账号。",
     "admin.settings.openaiExperimentalScheduler.subscriptionPriorityTitle": "订阅优先",
@@ -225,6 +230,11 @@ vi.mock("vue-i18n", async () => {
     "admin.settings.upstreamBillingProbe.intervalHint": "范围 5–1440 分钟。",
     "admin.settings.upstreamBillingProbe.saved": "上游倍率自动探测设置已保存",
     "admin.settings.upstreamBillingProbe.saveFailed": "保存上游倍率自动探测设置失败",
+    "admin.settings.openaiFastPolicy.summaryTargetModels": "目标模型",
+    "admin.settings.openaiFastPolicy.summaryAllModels": "全部模型",
+    "admin.settings.openaiFastPolicy.summaryOtherModels": "其他模型",
+    "admin.settings.openaiFastPolicy.summaryAction.filter": "过滤",
+    "admin.settings.openaiFastPolicy.summaryAction.pass": "透传",
     "admin.settings.security.passkeyDeploymentHint":
       "请由服务器运维在部署配置中将 webauthn.enabled 设为 true，填写 webauthn.rp_id（仅域名）与 webauthn.rp_origins（完整 HTTPS 来源），然后重启服务。",
     "admin.settings.site.uploadImage": "上传图片",
@@ -444,6 +454,8 @@ const baseSettingsResponse = {
   fallback_model_openai: "",
   fallback_model_gemini: "",
   fallback_model_antigravity: "",
+  grok_default_text_model: "grok-4.5",
+  grok_cross_client_model_map_enabled: false,
   enable_identity_patch: false,
   identity_patch_prompt: "",
   ops_monitoring_enabled: false,
@@ -453,6 +465,7 @@ const baseSettingsResponse = {
   min_claude_code_version: "",
   max_claude_code_version: "",
   allow_ungrouped_key_scheduling: false,
+  openai_ttft_mode: "semantic",
   enable_fingerprint_unification: true,
   enable_metadata_passthrough: false,
   enable_cch_signing: false,
@@ -592,6 +605,28 @@ async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
   await flushPromises();
 }
 
+describe("admin SettingsView email domain quota copy", () => {
+  it("documents the email domain quota and empty-whitelist behavior in both locales", () => {
+    expect(zhCommon.auth.emailDomainRegistrationLimit).toContain("主流邮箱");
+    expect(zhCommon.auth.emailDomainRegistrationLimit).toContain("联系客服");
+    expect(enCommon.auth.emailDomainRegistrationLimit).toContain("mainstream email");
+    expect(enCommon.auth.emailDomainRegistrationLimit).toContain("contact support");
+
+    // 白名单 hint 描述严格默认语义；额度语义移入独立开关的 hint。
+    const zhWhitelistHint = zhSettings.settings.registration.emailSuffixWhitelistHint;
+    const enWhitelistHint = enSettings.settings.registration.emailSuffixWhitelistHint;
+    expect(zhWhitelistHint).toContain("留空则不限制");
+    expect(enWhitelistHint).toContain("leave empty for no restriction");
+
+    const zhQuotaHint = zhSettings.settings.registration.emailDomainQuotaHint;
+    const enQuotaHint = enSettings.settings.registration.emailDomainQuotaHint;
+    expect(zhQuotaHint).toContain("其他可注册主域名各限注册一个账户");
+    expect(zhQuotaHint).toContain("关闭时非白名单域名直接拒绝");
+    expect(enQuotaHint).toContain("one account");
+    expect(enQuotaHint).toContain("When disabled");
+  });
+});
+
 describe("admin SettingsView payment visible method controls", () => {
   beforeEach(() => {
     getSettings.mockReset();
@@ -684,6 +719,31 @@ describe("admin SettingsView payment visible method controls", () => {
     });
     fetchPublicSettings.mockResolvedValue(undefined);
     adminSettingsFetch.mockResolvedValue(undefined);
+  });
+
+  it("loads and saves the open button visibility for each custom menu", async () => {
+    const menuItems = [
+      { id: "docs", label: "Docs", url: "https://example.com/docs", icon_svg: "", visibility: "user", sort_order: 0 },
+      { id: "help", label: "Help", url: "https://example.com/help", icon_svg: "", visibility: "user", sort_order: 1, hide_open_button: true },
+    ];
+    getSettings.mockResolvedValue({ ...baseSettingsResponse, custom_menu_items: menuItems });
+    const wrapper = mountView();
+    await flushPromises();
+
+    const toggles = wrapper.findAll<HTMLInputElement>('[data-testid="custom-menu-hide-open-button"]');
+    expect(toggles.map(toggle => toggle.element.checked)).toEqual([false, true]);
+    await toggles[0].setValue(true);
+    await toggles[1].setValue(false);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      custom_menu_items: [
+        { ...menuItems[0], hide_open_button: true },
+        { ...menuItems[1], hide_open_button: false },
+      ],
+    }));
+    wrapper.unmount();
   });
 
   it("submits the compact home page toggle", async () => {
@@ -1233,6 +1293,43 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(wrapper.text()).not.toContain("OpenAI 高级调度器");
   });
 
+  it("summarizes target and other-model actions, then switches to all models", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      openai_fast_policy_settings: {
+        rules: [
+          {
+            service_tier: "all",
+            action: "filter",
+            scope: "all",
+            model_whitelist: ["gpt-5.6-sol"],
+            fallback_action: "pass",
+          },
+        ],
+      },
+    });
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openGatewayTab(wrapper);
+
+    const summary = wrapper.get('[data-testid="openai-fast-policy-summary-0"]');
+    expect(summary.text()).toContain("目标模型");
+    expect(summary.text()).toContain("过滤");
+    expect(summary.text()).toContain("其他模型");
+    expect(summary.text()).toContain("透传");
+
+    await wrapper
+      .get(
+        '[role="group"][aria-labelledby="openai-fast-policy-models-label-0"] input[type="text"]',
+      )
+      .setValue("");
+    expect(summary.text()).toContain("全部模型");
+    expect(summary.text()).toContain("过滤");
+    expect(summary.text()).not.toContain("其他模型");
+    expect(summary.text()).not.toContain("透传");
+  });
+
   it("loads and saves upstream billing probe settings from the gateway tab", async () => {
     getUpstreamBillingProbeSettings.mockResolvedValueOnce({
       enabled: false,
@@ -1265,6 +1362,55 @@ describe("admin SettingsView payment visible method controls", () => {
     expect(showSuccess).toHaveBeenCalledWith("上游倍率自动探测设置已保存");
   });
 
+  it("loads and saves configurable Grok cross-client model mapping", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      grok_default_text_model: "grok-4.1-fast",
+      grok_cross_client_model_map_enabled: true,
+    });
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openGatewayTab(wrapper);
+
+    const modelInput = wrapper.get('[data-testid="grok-default-text-model"]');
+    const mappingToggle = wrapper.get(
+      '[data-testid="grok-cross-client-model-map-toggle"]',
+    );
+    expect((modelInput.element as HTMLInputElement).value).toBe("grok-4.1-fast");
+    expect((mappingToggle.element as HTMLInputElement).checked).toBe(true);
+
+    await modelInput.setValue("grok-custom-text");
+    await mappingToggle.setValue(false);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    const payload = updateSettings.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(payload.grok_default_text_model).toBe("grok-custom-text");
+    expect(payload.grok_cross_client_model_map_enabled).toBe(false);
+  });
+
+  it("loads and saves the OpenAI Responses first-token metric mode", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      openai_ttft_mode: "visible",
+    });
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openGatewayTab(wrapper);
+
+    const modeSelect = wrapper.get('[data-testid="openai-ttft-mode"]');
+    expect((modeSelect.element as HTMLSelectElement).value).toBe("visible");
+
+    await modeSelect.setValue("semantic");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    const payload = updateSettings.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(payload.openai_ttft_mode).toBe("semantic");
+  });
+
   it("loads fail-safe-off Ollama Cloud usage refresh settings and saves an explicit opt-in", async () => {
     const wrapper = mountView();
 
@@ -1292,6 +1438,54 @@ describe("admin SettingsView payment visible method controls", () => {
     });
   });
 
+  it.each([false, true])("clears the OAuth rate without losing zero (weighted=%s)", async (weighted) => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      openai_low_upstream_rate_priority_enabled: !weighted,
+      openai_advanced_scheduler_enabled: weighted,
+      openai_oauth_scheduling_rate_multiplier: 0.7,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const input = wrapper.get('[data-testid="openai-oauth-scheduling-rate-multiplier"]');
+    expect(input.attributes("required")).toBeUndefined();
+    await input.setValue("");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      openai_oauth_scheduling_rate_multiplier: null,
+    }));
+    await input.setValue("0");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenLastCalledWith(expect.objectContaining({
+      openai_oauth_scheduling_rate_multiplier: 0,
+    }));
+    updateSettings.mockClear();
+    await input.setValue("-1");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).not.toHaveBeenCalled();
+    expect(showError).toHaveBeenCalledWith("OAuth 调度参考倍率必须是非负数字，或留空以使用账号倍率。");
+  });
+
+  it("loads and preserves an explicitly cleared OAuth rate", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      openai_advanced_scheduler_enabled: true,
+      openai_oauth_scheduling_rate_multiplier: null,
+    });
+    const wrapper = mountView();
+    await flushPromises();
+    const input = wrapper.get<HTMLInputElement>('[data-testid="openai-oauth-scheduling-rate-multiplier"]');
+    expect(input.element.value).toBe("");
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+    expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({
+      openai_oauth_scheduling_rate_multiplier: null,
+    }));
+  });
+
   it("places and explains rate controls for both scheduling modes", async () => {
     const wrapper = mountView();
 
@@ -1304,7 +1498,7 @@ describe("admin SettingsView payment visible method controls", () => {
     await lowRateToggle.setValue(true);
     const priorityModeText = wrapper.text();
     expect(priorityModeText).toContain(
-      "同一分组同时包含 API Key 和 OAuth 账号时，OAuth 账号按此倍率与已探测的 API Key 计费倍率一起排序。",
+      "OAuth 账号按此参考倍率参与低倍率优先排序；留空时使用各自的账号倍率。",
     );
     expect(priorityModeText.indexOf("低倍率优先")).toBeLessThan(
       priorityModeText.indexOf("OAuth 调度参考倍率"),
@@ -1338,10 +1532,10 @@ describe("admin SettingsView payment visible method controls", () => {
     ).toBe(true);
     const weightedModeText = wrapper.text();
     expect(weightedModeText).toContain(
-      "同一分组同时包含 API Key 和 OAuth 账号时，计算“计费倍率”得分时，OAuth 账号按此倍率参与计算。",
+      "计算“计费倍率”得分时，OAuth 账号使用此参考倍率；留空时使用各自的账号倍率。",
     );
     expect(weightedModeText).not.toContain(
-      "OAuth 账号按此倍率与已探测的 API Key 计费倍率一起排序。",
+      "OAuth 账号按此参考倍率参与低倍率优先排序；",
     );
     expect(weightedModeText.indexOf("订阅优先")).toBeLessThan(
       weightedModeText.indexOf("OAuth 调度参考倍率"),

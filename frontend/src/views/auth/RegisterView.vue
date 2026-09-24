@@ -87,6 +87,38 @@
           </p>
         </div>
 
+        <!-- Confirm Password Input -->
+        <div>
+          <label for="confirmPassword" class="input-label">
+            {{ t('auth.confirmPassword') }}
+          </label>
+          <div class="relative">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
+            </div>
+            <input
+              id="confirmPassword"
+              v-model="confirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              required
+              autocomplete="new-password"
+              :disabled="registrationActionDisabled"
+              class="input pl-11 pr-11"
+              :class="{ 'input-error': errors.confirmPassword }"
+              :placeholder="t('auth.confirmPasswordPlaceholder')"
+            />
+            <button
+              type="button"
+              :disabled="registrationActionDisabled"
+              @click="showConfirmPassword = !showConfirmPassword"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+            >
+              <Icon v-if="showConfirmPassword" name="eyeOff" size="md" />
+              <Icon v-else name="eye" size="md" />
+            </button>
+          </div>
+        </div>
+
         <!-- Invitation Code Input (Required when enabled) -->
         <div v-if="invitationCodeEnabled">
           <label for="invitation_code" class="input-label">
@@ -284,6 +316,7 @@
         <EmailOAuthButtons
           :disabled="registrationActionDisabled"
           :aff-code="formData.aff_code"
+          :promo-code="formData.promo_code"
           :github-enabled="githubOAuthEnabled"
           :google-enabled="googleOAuthEnabled"
           :show-divider="false"
@@ -294,6 +327,7 @@
           v-if="linuxdoOAuthEnabled"
           :disabled="registrationActionDisabled"
           :aff-code="formData.aff_code"
+          :promo-code="formData.promo_code"
           :show-divider="false"
           @start="handleOAuthStart"
         />
@@ -353,7 +387,7 @@ import {
   validateInvitationCode
 } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
-import { extractI18nErrorMessage } from '@/utils/apiError'
+import { extractApiErrorCode, extractI18nErrorMessage } from '@/utils/apiError'
 import {
   formatRegistrationEmailSuffixWhitelistForMessage,
   isRegistrationEmailSuffixAllowed,
@@ -382,11 +416,19 @@ const isLoading = ref<boolean>(false)
 const settingsLoaded = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
+const showConfirmPassword = ref<boolean>(false)
+const confirmPassword = ref('')
 
 // Public settings
 const registrationEnabled = ref<boolean>(true)
 const emailVerifyEnabled = ref<boolean>(false)
-const promoCodeEnabled = ref<boolean>(true)
+// Public settings are injected into the app store before Vue mounts. Use that
+// value for the first render so a disabled promo-code field never flashes
+// while the async settings request is still in flight. If injection is
+// unavailable, fail closed until the request explicitly enables the field.
+const promoCodeEnabled = ref<boolean>(
+  appStore.cachedPublicSettings?.promo_code_enabled === true
+)
 const invitationCodeEnabled = ref<boolean>(false)
 const affiliateEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
@@ -406,6 +448,8 @@ const oidcOAuthProviderName = ref<string>('OIDC')
 const githubOAuthEnabled = ref<boolean>(false)
 const googleOAuthEnabled = ref<boolean>(false)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
+// 域名限量注册开关：开启时非白名单域名可注册 1 个账户（由后端判定），前端不做白名单预检。
+const emailDomainQuotaEnabled = ref<boolean>(false)
 const loginAgreementEnabled = ref<boolean>(false)
 const loginAgreementMode = ref<'modal' | 'checkbox' | string>('modal')
 const loginAgreementUpdatedAt = ref<string>('')
@@ -465,6 +509,7 @@ const formData = reactive({
 const errors = reactive({
   email: '',
   password: '',
+  confirmPassword: '',
   turnstile: '',
   invitation_code: ''
 })
@@ -472,6 +517,7 @@ const errors = reactive({
 const validationToastMessage = computed(() =>
   errors.email ||
   errors.password ||
+  errors.confirmPassword ||
   (invitationValidation.invalid ? invitationValidation.message : '') ||
   errors.invitation_code ||
   (promoValidation.invalid ? promoValidation.message : '') ||
@@ -541,6 +587,7 @@ onMounted(async () => {
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
+    emailDomainQuotaEnabled.value = settings.registration_email_domain_quota_enabled === true
     applyLoginAgreementSettings(settings)
 
     // Read promo code from URL parameter only if promo code is enabled
@@ -879,6 +926,7 @@ function validateForm(): boolean {
   // Reset errors
   errors.email = ''
   errors.password = ''
+  errors.confirmPassword = ''
   errors.turnstile = ''
   errors.invitation_code = ''
 
@@ -900,8 +948,10 @@ function validateForm(): boolean {
     errors.email = t('auth.invalidEmail')
     isValid = false
   } else if (
+    !emailDomainQuotaEnabled.value &&
     !isRegistrationEmailSuffixAllowed(formData.email, registrationEmailSuffixWhitelist.value)
   ) {
+    // 域名限量注册关闭时保持严格白名单预检；开启时交给后端按域名额度判定
     errors.email = buildEmailSuffixNotAllowedMessage()
     isValid = false
   }
@@ -912,6 +962,15 @@ function validateForm(): boolean {
     isValid = false
   } else if (formData.password.length < 6) {
     errors.password = t('auth.passwordMinLength')
+    isValid = false
+  }
+
+  // Confirm password validation
+  if (!confirmPassword.value) {
+    errors.confirmPassword = t('auth.confirmPasswordRequired')
+    isValid = false
+  } else if (formData.password !== confirmPassword.value) {
+    errors.confirmPassword = t('auth.passwordsDoNotMatch')
     isValid = false
   }
 
@@ -1037,9 +1096,7 @@ async function handleRegister(): Promise<void> {
     await router.push('/dashboard')
   } catch (error: unknown) {
     // Handle registration error
-    errorMessage.value = buildAuthErrorMessage(error, {
-      fallback: t('auth.registrationFailed')
-    })
+    errorMessage.value = buildRegistrationErrorMessage(error, t('auth.registrationFailed'))
 
     // Also show error toast
     appStore.showError(errorMessage.value)
@@ -1049,6 +1106,13 @@ async function handleRegister(): Promise<void> {
     }
     isLoading.value = false
   }
+}
+
+function buildRegistrationErrorMessage(error: unknown, fallback: string): string {
+  if (extractApiErrorCode(error) === 'EMAIL_DOMAIN_REGISTRATION_LIMIT') {
+    return t('auth.emailDomainRegistrationLimit')
+  }
+  return buildAuthErrorMessage(error, { fallback })
 }
 </script>
 
