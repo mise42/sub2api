@@ -17,8 +17,6 @@ Dockerfile.goreleaser
 .goreleaser.simple.yaml
 .goreleaser.yaml
 
-# Tests are validated locally before deployment and are excluded from the
-# production Docker context by .dockerignore.
+# Backend tests are validated locally before deployment. Frontend tests remain
+# available because the production build runs the i18n completeness spec.
 backend/**/*_test.go
-frontend/src/**/__tests__/
-frontend/src/**/*.spec.ts
